@@ -93,7 +93,7 @@ jobs:
 
     - name: Create fat libraries using lipo
       run: |
-        mkdir -p "${OUTPUT_DIR}/fat"
+        mkdir -p "${OUTPUT_DIR}/fat/macos" "${OUTPUT_DIR}/fat/iphoneos" "${OUTPUT_DIR}/fat/iphonesimulator"
         
         MACOS_ARCHS="arm64 x86_64"
         IPHONEOS_ARCHS="arm64"
@@ -104,14 +104,14 @@ jobs:
         for lib in $LIBRARIES; do
           # For macOS
           lipo -create $(for arch in $MACOS_ARCHS; do echo "${OUTPUT_DIR}/build-macosx-${arch}/macosx-${arch}-MacOSX/lib/${lib}.a"; done) \
-            -output "${OUTPUT_DIR}/fat/${lib}-macos.a"
+            -output "${OUTPUT_DIR}/fat/macos/${lib}.a"
           
           # For iOS device
-          cp "${OUTPUT_DIR}/build-iphoneos-arm64/iphoneos-arm64-iPhoneOS/lib/${lib}.a" "${OUTPUT_DIR}/fat/${lib}-iphoneos.a"
+          cp "${OUTPUT_DIR}/build-iphoneos-arm64/iphoneos-arm64-iPhoneOS/lib/${lib}.a" "${OUTPUT_DIR}/fat/iphoneos/${lib}.a"
           
           # For iOS simulator
           lipo -create $(for arch in $IPHONESIMULATOR_ARCHS; do echo "${OUTPUT_DIR}/build-iphonesimulator-${arch}/iphonesimulator-${arch}-iPhoneSimulator/lib/${lib}.a"; done) \
-            -output "${OUTPUT_DIR}/fat/${lib}-iphonesimulator.a"
+            -output "${OUTPUT_DIR}/fat/iphonesimulator/${lib}.a"
         done
         
     - name: Create XCFrameworks
@@ -138,7 +138,7 @@ jobs:
           # Prepare xcodebuild command
           cmd="xcodebuild -create-xcframework"
           for platform in $PLATFORMS; do
-            cmd+=" -library ${OUTPUT_DIR}/fat/lib${lib}-${platform}.a"
+            cmd+=" -library ${OUTPUT_DIR}/fat/${platform}/lib${lib}.a"
             cmd+=" -headers ${OUTPUT_DIR}/Headers"
           done
           cmd+=" -output ${OUTPUT_DIR}/${lib}.xcframework"
