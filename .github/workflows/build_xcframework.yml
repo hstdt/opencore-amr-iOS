@@ -14,6 +14,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write
+
 env:
   OUTPUT_DIR: ${{ github.workspace }}/output
 
@@ -30,7 +33,10 @@ jobs:
           - { sdk: 'iphonesimulator', arch: 'arm64', platform: 'iPhoneSimulator' }
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24
 
     - name: Get Xcode version
       id: xcode-version
@@ -41,7 +47,7 @@ jobs:
       run: echo "version=$(sw_vers -productVersion)" >> $GITHUB_OUTPUT
 
     - name: Cache build results
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       id: cache
       with:
         path: ${{ env.OUTPUT_DIR }}
@@ -69,7 +75,7 @@ jobs:
         ./.github/actions/build_library.sh ${{ matrix.config.sdk }} ${{ matrix.config.arch }} ${{ matrix.config.platform }}
 
     - name: Upload build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}
         path: ${{ env.OUTPUT_DIR }}
@@ -79,10 +85,10 @@ jobs:
     needs: build
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Download all build artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         path: ${{ env.OUTPUT_DIR }}
 
@@ -156,7 +162,7 @@ jobs:
         ls -la
 
     - name: Upload XCFrameworks
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: XCFrameworks
         path: ${{ env.OUTPUT_DIR }}/*.xcframework.zip
@@ -166,9 +172,11 @@ jobs:
     needs: create-xcframework
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
     steps:
     - name: Download XCFrameworks
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: XCFrameworks
 
