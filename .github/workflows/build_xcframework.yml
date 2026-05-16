@@ -2,11 +2,9 @@ name: Build and Release XCFramework
 
 on:
   push:
-    branches: [ main, master ]
     tags:
-      - 'v*' # This will trigger the workflow on any tag starting with 'v'
-  pull_request:
-    branches: [ main, master ]
+      - 'v*'  # This will trigger the workflow on any tag starting with 'v'
+
   workflow_dispatch:
     inputs:
       release_version:
