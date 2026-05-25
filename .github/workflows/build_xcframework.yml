@@ -1,16 +1,12 @@
 name: Build and Release XCFramework
 
 on:
-  push:
-    tags:
-      - 'v*'  # 当推送以 'v' 开头的 tag 时触发
-
   workflow_dispatch:
     inputs:
       release_version:
         description: 'Release version (must start with "v", e.g., v0.1.6)'
-        required: false
-        default: ''
+        required: true
+        default: 'v0.1.6'
 
 permissions:
   contents: write
@@ -19,7 +15,28 @@ env:
   OUTPUT_DIR: ${{ github.workspace }}/output
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+    - name: Validate release version
+      id: version
+      run: |
+        if [[ "${{ github.ref_type }}" != "branch" ]]; then
+          echo "Error: Run this workflow from a branch so it can commit Package.swift before tagging."
+          exit 1
+        fi
+
+        VERSION="${{ github.event.inputs.release_version }}"
+        if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9.-]+)?$ ]]; then
+          echo "Error: Invalid version format. Must start with 'v' followed by semantic versioning."
+          exit 1
+        fi
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: prepare
     runs-on: macos-latest
     strategy:
       matrix:
@@ -29,6 +46,16 @@ jobs:
           - { sdk: 'iphoneos', arch: 'arm64', platform: 'iPhoneOS' }
           - { sdk: 'iphonesimulator', arch: 'x86_64', platform: 'iPhoneSimulator' }
           - { sdk: 'iphonesimulator', arch: 'arm64', platform: 'iPhoneSimulator' }
+          - { sdk: 'appletvos', arch: 'arm64', platform: 'AppleTVOS' }
+          - { sdk: 'appletvsimulator', arch: 'x86_64', platform: 'AppleTVSimulator' }
+          - { sdk: 'appletvsimulator', arch: 'arm64', platform: 'AppleTVSimulator' }
+          - { sdk: 'xros', arch: 'arm64', platform: 'XROS' }
+          - { sdk: 'xrsimulator', arch: 'x86_64', platform: 'XRSimulator' }
+          - { sdk: 'xrsimulator', arch: 'arm64', platform: 'XRSimulator' }
+          - { sdk: 'watchos', arch: 'arm64_32', platform: 'WatchOS' }
+          - { sdk: 'watchos', arch: 'arm64', platform: 'WatchOS' }
+          - { sdk: 'watchsimulator', arch: 'x86_64', platform: 'WatchSimulator' }
+          - { sdk: 'watchsimulator', arch: 'arm64', platform: 'WatchSimulator' }
 
     steps:
     - uses: actions/checkout@v6
@@ -46,7 +73,7 @@ jobs:
       id: cache
       with:
         path: ${{ env.OUTPUT_DIR }}
-        key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm', '.github/actions/*.sh') }}-${{ steps.xcode-version.outputs.version }}-${{ steps.macos-version.outputs.version }}
+        key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm', '.github/actions/*.sh', 'scripts/*.sh') }}-${{ steps.xcode-version.outputs.version }}-${{ steps.macos-version.outputs.version }}
 
     - name: Set up Xcode
       if: steps.cache.outputs.cache-hit != 'true'
@@ -77,90 +104,76 @@ jobs:
         retention-days: 1
 
   create-xcframework:
-    needs: build
+    needs:
+      - prepare
+      - build
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
 
     - name: Download all build artifacts
       uses: actions/download-artifact@v8
       with:
         path: ${{ env.OUTPUT_DIR }}
 
-    - name: Create fat libraries using lipo
+    - name: Create framework-based XCFrameworks
       run: |
-        mkdir -p "${OUTPUT_DIR}/fat/macos" "${OUTPUT_DIR}/fat/iphoneos" "${OUTPUT_DIR}/fat/iphonesimulator"
-        
-        MACOS_ARCHS="arm64 x86_64"
-        IPHONEOS_ARCHS="arm64"
-        IPHONESIMULATOR_ARCHS="x86_64 arm64"
-        
-        LIBRARIES="libopencore-amrnb libopencore-amrwb"
-        
-        for lib in $LIBRARIES; do
-          # For macOS
-          lipo -create $(for arch in $MACOS_ARCHS; do echo "${OUTPUT_DIR}/build-macosx-${arch}/macosx-${arch}-MacOSX/lib/${lib}.a"; done) \
-            -output "${OUTPUT_DIR}/fat/macos/${lib}.a"
-          
-          # For iOS device
-          cp "${OUTPUT_DIR}/build-iphoneos-arm64/iphoneos-arm64-iPhoneOS/lib/${lib}.a" "${OUTPUT_DIR}/fat/iphoneos/${lib}.a"
-          
-          # For iOS simulator
-          lipo -create $(for arch in $IPHONESIMULATOR_ARCHS; do echo "${OUTPUT_DIR}/build-iphonesimulator-${arch}/iphonesimulator-${arch}-iPhoneSimulator/lib/${lib}.a"; done) \
-            -output "${OUTPUT_DIR}/fat/iphonesimulator/${lib}.a"
-        done
-        
-    - name: Create XCFrameworks
-      run: |
-        mkdir -p "${OUTPUT_DIR}/Headers/"
-        
-        LIBRARIES="opencore-amrnb opencore-amrwb"
-        PLATFORMS="macos iphoneos iphonesimulator"
-        
-        for lib in $LIBRARIES; do
-          rm -rf ${OUTPUT_DIR}/Headers/*
-          rm -rf ${OUTPUT_DIR}/${lib}.xcframework
-          
-          # Copy headers
-          case $lib in
-            opencore-amrnb)
-              cp -a amrnb/interf_dec.h amrnb/interf_enc.h ${OUTPUT_DIR}/Headers/
-              ;;
-            opencore-amrwb)
-              cp -a amrwb/dec_if.h amrwb/if_rom.h ${OUTPUT_DIR}/Headers/
-              ;;
-          esac
-          
-          # Prepare xcodebuild command
-          cmd="xcodebuild -create-xcframework"
-          for platform in $PLATFORMS; do
-            cmd+=" -library ${OUTPUT_DIR}/fat/${platform}/lib${lib}.a"
-            cmd+=" -headers ${OUTPUT_DIR}/Headers"
-          done
-          cmd+=" -output ${OUTPUT_DIR}/${lib}.xcframework"
-          
-          # Execute xcodebuild command
-          eval $cmd
-        done
+        ./.github/actions/create_xcframework.sh opencore-amrnb
+        ./.github/actions/create_xcframework.sh opencore-amrwb
+        ./scripts/validate_xcframeworks.sh "$OUTPUT_DIR"
 
     - name: Zip XCFrameworks
       run: |
-        cd ${{ env.OUTPUT_DIR }}
-        for framework in *.xcframework; do
-          zip -r "${framework%.xcframework}.xcframework.zip" "$framework"
-        done
+        ./scripts/zip_xcframeworks.sh "${OUTPUT_DIR}"
+
+    - name: Update Package.swift with CI checksums
+      run: |
+        VERSION="${{ needs.prepare.outputs.version }}"
+        ./scripts/update_package_swift.sh \
+          "$VERSION" \
+          "${OUTPUT_DIR}/OpenCoreAMRNB.xcframework.zip" \
+          "${OUTPUT_DIR}/OpenCoreAMRWB.xcframework.zip"
+
+        ./scripts/check_package_swift.sh \
+          "$VERSION" \
+          "${OUTPUT_DIR}/OpenCoreAMRNB.xcframework.zip" \
+          "${OUTPUT_DIR}/OpenCoreAMRWB.xcframework.zip"
+
+    - name: Commit Package.swift and update tag
+      run: |
+        VERSION="${{ needs.prepare.outputs.version }}"
+        BRANCH="${GITHUB_REF_NAME}"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        git add Package.swift
+        if git diff --cached --quiet; then
+          echo "Package.swift already contains CI checksums."
+        else
+          git commit -m "Update ${VERSION} binary checksums"
+          git push origin "HEAD:${BRANCH}"
+        fi
+
+        git tag -f "$VERSION" HEAD
+        git push origin "refs/tags/${VERSION}" --force
 
     - name: Upload XCFrameworks
       uses: actions/upload-artifact@v7
       with:
         name: XCFrameworks
-        path: ${{ env.OUTPUT_DIR }}/*.xcframework.zip
+        path: |
+          ${{ env.OUTPUT_DIR }}/*.xcframework.zip
+          ${{ env.OUTPUT_DIR }}/checksums.txt
         if-no-files-found: error
 
   release:
-    needs: create-xcframework
+    needs:
+      - prepare
+      - create-xcframework
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     steps:
@@ -169,29 +182,18 @@ jobs:
         name: XCFrameworks
         path: artifacts
 
-    - name: Determine Release Version
-      id: version
-      run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
-        elif [[ "${{ github.event.inputs.release_version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          VERSION=${{ github.event.inputs.release_version }}
-        else
-          echo "Error: Invalid version format. Must start with 'v' followed by semantic versioning."
-          exit 1
-        fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-
     - name: Create Release and Upload XCFrameworks
       uses: softprops/action-gh-release@v3
       with:
-        tag_name: ${{ steps.version.outputs.version }}
-        name: Release ${{ steps.version.outputs.version }}
+        tag_name: ${{ needs.prepare.outputs.version }}
+        name: Release ${{ needs.prepare.outputs.version }}
         draft: false
         prerelease: false
         generate_release_notes: true
         fail_on_unmatched_files: true
+        overwrite_files: true
         files: |
           artifacts/*.xcframework.zip
+          artifacts/checksums.txt
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
