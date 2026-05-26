@@ -20,12 +20,12 @@ let package = Package(
         .binaryTarget(
             name: "OpenCoreAMRNB",
             url: "https://github.com/hstdt/opencore-amr-iOS/releases/download/v0.1.6/OpenCoreAMRNB.xcframework.zip",
-            checksum: "099a0070f8e7963f4aa483b9d7aec2903ecba6ca47b60817a13fe26562bd5441"
+            checksum: "3a84382cb9549afe5fe0f3ba8f771cf0b72394fd5c6ab5fc703bc541c332d996"
         ),
         .binaryTarget(
             name: "OpenCoreAMRWB",
             url: "https://github.com/hstdt/opencore-amr-iOS/releases/download/v0.1.6/OpenCoreAMRWB.xcframework.zip",
-            checksum: "8cb5c95294bff30ed951db94ba87b69057bb4c8fb56991dd9a68e1313740a02d"
+            checksum: "b455897d0549c260290e79015e3a14c63a19ca70d85c57bd54e880655f215a5d"
         ),
         .target(
             name: "OpenCoreAMRCodec",
