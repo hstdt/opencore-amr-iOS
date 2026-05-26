@@ -45,9 +45,10 @@ let package = Package(
         .watchOS(.v6),
     ],
     products: [
-        .library(name: "OpenCoreAMR", targets: ["OpenCoreAMRNB", "OpenCoreAMRWB"]),
+        .library(name: "OpenCoreAMR", targets: ["OpenCoreAMRNB", "OpenCoreAMRWB", "OpenCoreAMRCodec"]),
         .library(name: "OpenCoreAMRNB", targets: ["OpenCoreAMRNB"]),
         .library(name: "OpenCoreAMRWB", targets: ["OpenCoreAMRWB"]),
+        .library(name: "OpenCoreAMRCodec", targets: ["OpenCoreAMRCodec"]),
     ],
     targets: [
         .binaryTarget(
@@ -59,6 +60,15 @@ let package = Package(
             name: "OpenCoreAMRWB",
             url: "${repository_url}/releases/download/${version}/OpenCoreAMRWB.xcframework.zip",
             checksum: "${wb_checksum}"
+        ),
+        .target(
+            name: "OpenCoreAMRCodec",
+            dependencies: ["OpenCoreAMRNB", "OpenCoreAMRWB"]
+        ),
+        .testTarget(
+            name: "OpenCoreAMRCodecTests",
+            dependencies: ["OpenCoreAMRCodec"],
+            path: "tests/OpenCoreAMRCodecTests"
         ),
     ]
 )

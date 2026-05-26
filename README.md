@@ -46,9 +46,22 @@ Add this repository as a Swift Package dependency and select one of:
 OpenCoreAMR    # NB + WB
 OpenCoreAMRNB  # AMR-NB only
 OpenCoreAMRWB  # AMR-WB only
+OpenCoreAMRCodec # Swift AMR-NB/WB to WAV decoder
 ```
 
 The package currently declares iOS 12+, macOS 10.13+, tvOS 12+, visionOS 1+, and watchOS 6+ because the release XCFrameworks contain matching slices. The framework binary deployment target still defaults to iOS 8.0; SwiftPM's current manifest API warns on older iOS platform declarations.
+
+`OpenCoreAMRCodec` provides a Swift wrapper around the NB/WB decoder modules:
+
+```swift
+import OpenCoreAMRCodec
+
+if OpenCoreAMRCodec.isAMR(data) {
+    let wavData = try OpenCoreAMRCodec.decodeToWAVData(data)
+}
+```
+
+The codec supports AMR-NB files with `#!AMR\n` headers and AMR-WB files with `#!AMR-WB\n` headers. It outputs mono 16-bit PCM WAV data at 8 kHz for NB and 16 kHz for WB.
 
 Release flow:
 
