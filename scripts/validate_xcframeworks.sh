@@ -35,6 +35,9 @@ for xcframework in "${xcframeworks[@]}"; do
     binary="${framework}/${name}"
     modulemap="${framework}/Modules/module.modulemap"
     umbrella="${framework}/Headers/${name}.h"
+    slice_dir="$(dirname "$framework")"
+    dsym="${slice_dir}/dSYMs/${name}.framework.dSYM"
+    dsym_binary="${dsym}/Contents/Resources/DWARF/${name}"
 
     if [[ ! -f "$binary" ]]; then
       echo "Missing framework binary: $binary" >&2
@@ -56,7 +59,24 @@ for xcframework in "${xcframeworks[@]}"; do
       file "$binary" >&2
       exit 1
     fi
+
+    if [[ ! -f "$dsym_binary" ]]; then
+      echo "Missing dSYM DWARF binary: $dsym_binary" >&2
+      exit 1
+    fi
+
+    binary_uuids="$(xcrun dwarfdump --uuid "$binary" | awk '/UUID:/ { print toupper($2) }' | sort -u)"
+    dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_binary" | awk '/UUID:/ { print toupper($2) }' | sort -u)"
+
+    if [[ -z "$binary_uuids" || "$binary_uuids" != "$dsym_uuids" ]]; then
+      echo "dSYM UUID mismatch for: $binary" >&2
+      echo "Framework UUIDs:" >&2
+      echo "$binary_uuids" >&2
+      echo "dSYM UUIDs:" >&2
+      echo "$dsym_uuids" >&2
+      exit 1
+    fi
   done < <(find "$xcframework" -mindepth 2 -maxdepth 2 -type d -name "${name}.framework")
 done
 
-echo "XCFramework bundle layout is valid."
+echo "XCFramework bundle layout and dSYM UUIDs are valid."

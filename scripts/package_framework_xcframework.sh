@@ -229,6 +229,7 @@ link_dynamic_framework() {
   write_info_plist "$destination" "$platform_name" "$minimum_key" "$minimum_version"
 
   xcrun --sdk "$(tr '[:upper:]' '[:lower:]' <<< "$sdk")" clang++ \
+    -g \
     -dynamiclib \
     "${arch_flags[@]}" \
     -isysroot "$sdk_root" \
@@ -266,6 +267,7 @@ link_dynamic_framework_from_archives() {
     binary="${scratch}/${framework_name}-${arch}"
 
     xcrun --sdk "$(tr '[:upper:]' '[:lower:]' <<< "$sdk")" clang++ \
+      -g \
       -dynamiclib \
       -target "$target" \
       -isysroot "$sdk_root" \
@@ -277,6 +279,23 @@ link_dynamic_framework_from_archives() {
   done
 
   lipo -create "${binaries[@]}" -output "${destination}/${framework_name}"
+}
+
+create_debug_symbols() {
+  local framework=$1
+  local binary="${framework}/${framework_name}"
+  local dsym="${framework}.dSYM"
+
+  rm -rf "$dsym"
+  xcrun dsymutil "$binary" -o "$dsym"
+  require_file "${dsym}/Contents/Resources/DWARF/${framework_name}"
+}
+
+absolute_path() {
+  local path=$1
+  local directory
+  directory="$(cd "$(dirname "$path")" && pwd)"
+  printf '%s/%s\n' "$directory" "$(basename "$path")"
 }
 
 iphoneos_framework="${frameworks_dir}/iphoneos/${framework_name}.framework"
@@ -326,16 +345,51 @@ link_dynamic_framework "WatchSimulator" "WatchSimulator" "${fat_dir}/watchsimula
   "MinimumOSVersion" "$watchos_min_version" \
   -arch x86_64 -arch arm64 -mwatchos-simulator-version-min="$watchos_min_version"
 
+framework_slices=(
+  "$iphoneos_framework"
+  "$iphonesimulator_framework"
+  "$macos_framework"
+  "$appletvos_framework"
+  "$appletvsimulator_framework"
+  "$xros_framework"
+  "$xrsimulator_framework"
+  "$watchos_framework"
+  "$watchsimulator_framework"
+)
+
+for framework in "${framework_slices[@]}"; do
+  create_debug_symbols "$framework"
+done
+
+iphoneos_dsym="$(absolute_path "${iphoneos_framework}.dSYM")"
+iphonesimulator_dsym="$(absolute_path "${iphonesimulator_framework}.dSYM")"
+macos_dsym="$(absolute_path "${macos_framework}.dSYM")"
+appletvos_dsym="$(absolute_path "${appletvos_framework}.dSYM")"
+appletvsimulator_dsym="$(absolute_path "${appletvsimulator_framework}.dSYM")"
+xros_dsym="$(absolute_path "${xros_framework}.dSYM")"
+xrsimulator_dsym="$(absolute_path "${xrsimulator_framework}.dSYM")"
+watchos_dsym="$(absolute_path "${watchos_framework}.dSYM")"
+watchsimulator_dsym="$(absolute_path "${watchsimulator_framework}.dSYM")"
+
 xcodebuild -create-xcframework \
   -framework "$iphoneos_framework" \
+  -debug-symbols "$iphoneos_dsym" \
   -framework "$iphonesimulator_framework" \
+  -debug-symbols "$iphonesimulator_dsym" \
   -framework "$macos_framework" \
+  -debug-symbols "$macos_dsym" \
   -framework "$appletvos_framework" \
+  -debug-symbols "$appletvos_dsym" \
   -framework "$appletvsimulator_framework" \
+  -debug-symbols "$appletvsimulator_dsym" \
   -framework "$xros_framework" \
+  -debug-symbols "$xros_dsym" \
   -framework "$xrsimulator_framework" \
+  -debug-symbols "$xrsimulator_dsym" \
   -framework "$watchos_framework" \
+  -debug-symbols "$watchos_dsym" \
   -framework "$watchsimulator_framework" \
+  -debug-symbols "$watchsimulator_dsym" \
   -output "$xcframework_path"
 
 echo "Created ${xcframework_path}"

@@ -33,6 +33,7 @@ expect_not_contains() {
 
 workflow=".github/workflows/build_xcframework.yml"
 ci_helper=".github/actions/create_xcframework.sh"
+ci_builder=".github/actions/build_library.sh"
 local_builder="build_ios.sh"
 packager="scripts/package_framework_xcframework.sh"
 validator="scripts/validate_xcframeworks.sh"
@@ -41,7 +42,7 @@ package_checker="scripts/check_package_swift.sh"
 package_updater="scripts/update_package_swift.sh"
 package_manifest="Package.swift"
 
-for file in "$workflow" "$ci_helper" "$local_builder" "$packager" "$validator" "$zipper" "$package_checker" "$package_updater" "$package_manifest"; do
+for file in "$workflow" "$ci_helper" "$ci_builder" "$local_builder" "$packager" "$validator" "$zipper" "$package_checker" "$package_updater" "$package_manifest"; do
   if [[ ! -f "$file" ]]; then
     fail "required file is missing: $file"
   fi
@@ -74,8 +75,12 @@ expect_contains "$workflow" "sdk: 'watchos'" \
 
 expect_contains "$ci_helper" 'scripts/package_framework_xcframework.sh' \
   "CI helper must delegate to the shared framework packager"
+expect_contains "$ci_builder" '-O3 -g -DNDEBUG' \
+  "CI builds must preserve debug information for dSYM generation"
 expect_contains "$local_builder" 'scripts/package_framework_xcframework.sh' \
   "local build must delegate to the shared framework packager"
+expect_contains "$local_builder" '-O3 -g -DNDEBUG' \
+  "local builds must preserve debug information for dSYM generation"
 expect_contains "$local_builder" 'build_library "appletvos" "arm64" "AppleTVOS"' \
   "local build must include tvOS"
 expect_contains "$local_builder" 'build_library "xros" "arm64" "XROS"' \
@@ -84,6 +89,10 @@ expect_contains "$local_builder" 'build_library "watchos" "arm64_32" "WatchOS"' 
   "local build must include watchOS"
 expect_contains "$packager" 'xcodebuild -create-xcframework' \
   "packager must create XCFrameworks with xcodebuild"
+expect_contains "$packager" 'xcrun dsymutil' \
+  "packager must generate a dSYM for each framework slice"
+expect_contains "$packager" '-debug-symbols "$iphoneos_dsym"' \
+  "packager must include dSYMs in the XCFramework"
 expect_contains "$packager" '-framework "$iphoneos_framework"' \
   "packager must pass framework slices, not static libraries"
 expect_contains "$packager" '-framework "$appletvos_framework"' \
@@ -98,6 +107,8 @@ expect_contains "$packager" 'Modules/module.modulemap' \
   "packager must create a module map for Swift imports"
 expect_contains "$packager" 'Headers/${framework_name}.h' \
   "packager must create an umbrella header"
+expect_contains "$validator" 'xcrun dwarfdump --uuid' \
+  "validator must compare framework and dSYM UUIDs"
 expect_contains "$zipper" 'swift package compute-checksum' \
   "zip helper must compute SwiftPM checksums"
 expect_contains "$zipper" 'COPYFILE_DISABLE=1 TZ=UTC zip -Xqr' \

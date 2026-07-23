@@ -18,7 +18,7 @@ config_library() {
     mkdir -p "${ROOTDIR}"
 
     SDKROOT="${PLATFORMSROOT}/${sdk}.platform/Developer/SDKs/${sdk}.sdk/"
-    CFLAGS="-arch ${ARCH2:-${arch}} -pipe -isysroot ${SDKROOT} -O3 -DNDEBUG"
+    CFLAGS="-arch ${ARCH2:-${arch}} -pipe -isysroot ${SDKROOT} -O3 -g -DNDEBUG"
     CXX_TARGET_FLAGS="-arch ${ARCH2:-${arch}} "
 
     if [[ ${platform} == "iphoneos" ]]; then

@@ -75,6 +75,8 @@ OpenCoreAMRWB.xcframework.zip
 checksums.txt
 ```
 
+Every framework slice includes a matching dSYM. The validation step compares the framework and dSYM UUIDs before the release assets are created, so archives built with these artifacts can upload third-party symbols to App Store Connect.
+
 The release tag must point at the commit containing the final checksums. Do not create the tag by hand before running the workflow; the workflow owns tag creation and updates for unpublished releases.
 
 If you need to verify or reproduce the manifest locally, download the release zip files and run:
@@ -91,8 +93,8 @@ Version tags follow the bundled opencore-amr source version from `configure.ac` 
 Helper scripts:
 
 ```text
-scripts/package_framework_xcframework.sh   # package one built static library into framework-based XCFramework
-scripts/validate_xcframeworks.sh           # validate output contains framework slices, not raw .a slices
+scripts/package_framework_xcframework.sh   # package one built static library and matching dSYMs into a framework-based XCFramework
+scripts/validate_xcframeworks.sh           # validate framework layout and matching dSYM UUIDs
 scripts/zip_xcframeworks.sh                # create deterministic SwiftPM zip artifacts and checksums.txt
 scripts/update_package_swift.sh            # update Package.swift URLs/checksums for a release version
 scripts/check_package_swift.sh             # verify Package.swift matches release zip checksums
